@@ -8,11 +8,15 @@ import javax.faces.bean.ManagedBean;
 import javax.faces.bean.RequestScoped;
 import javax.faces.bean.ViewScoped;
 import javax.faces.component.html.HtmlCommandButton;
+import javax.faces.context.ExternalContext;
+import javax.faces.context.FacesContext;
 
 import com.sun.faces.taglib.html_basic.CommandButtonTag;
 
 import br.com.dao.DaoGeneric;
 import br.com.entidades.Pessoa;
+import br.com.repository.IDaoPessoa;
+import br.com.repository.IDaoPessoaImple;
 
 @ViewScoped
 @ManagedBean(name="pessoaBean")
@@ -21,6 +25,7 @@ public class PessoaBean {
 	private Pessoa pessoa = new Pessoa();
 	private DaoGeneric<Pessoa> daoGeneric = new DaoGeneric<Pessoa>();
 	private List<Pessoa> pessoas = new ArrayList<Pessoa>();
+	private IDaoPessoa iDaoPessoa = new IDaoPessoaImple();
 	
 	@PostConstruct
 	public void carregarPessoas() {
@@ -73,6 +78,28 @@ public class PessoaBean {
 		this.pessoas = pessoas;
 	}
 	
+	public String logar() {
+		
+		Pessoa pessoaUser = iDaoPessoa.consultaUsuario(pessoa.getLogin(), pessoa.getSenha());
+		
+		if(pessoaUser != null) {//achou o usuário
+			//adicionar usuário na sessão
+			FacesContext context = FacesContext.getCurrentInstance();
+			ExternalContext externalContext = context.getExternalContext();
+			externalContext.getSessionMap().put("usuarioLogado", pessoaUser);
+			
+			return "primeirapagina.xhtml";
+		}
+		
+		return "index.jsf";
+	}
 	
+	public boolean permiteAcesso(String acesso) {
+		FacesContext context = FacesContext.getCurrentInstance();
+		ExternalContext externalContext = context.getExternalContext();
+		Pessoa pessoaUser =(Pessoa) externalContext.getSessionMap().get("usuarioLogado");
+		
+		return pessoaUser.getPerfilUser().equals(acesso);
+	}
 	
 }
