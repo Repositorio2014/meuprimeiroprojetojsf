@@ -1,16 +1,24 @@
 package br.com.cursojsf;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.PostConstruct;
+import javax.faces.application.FacesMessage;
 import javax.faces.bean.ManagedBean;
 import javax.faces.bean.RequestScoped;
 import javax.faces.bean.ViewScoped;
 import javax.faces.component.html.HtmlCommandButton;
 import javax.faces.context.ExternalContext;
 import javax.faces.context.FacesContext;
+import javax.faces.event.AjaxBehaviorEvent;
 
+import com.google.gson.Gson;
 import com.sun.faces.taglib.html_basic.CommandButtonTag;
 
 import br.com.dao.DaoGeneric;
@@ -35,7 +43,48 @@ public class PessoaBean {
 	public String salvar() {
 		pessoa = daoGeneric.merge(pessoa);
 		carregarPessoas();
+		this.mostrarMsg("Cadastrado com sucesso!");
+		
 		return "";
+	}
+	
+	public void consultaCep(AjaxBehaviorEvent event) {
+		try {
+			
+			URL url = new URL("https://viacep.com.br/ws/" + pessoa.getCep() + "/json/");
+			URLConnection connection = url.openConnection();
+			InputStream is = connection.getInputStream();
+			BufferedReader br = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+			
+			String cep = "";
+			StringBuffer jsonCep = new StringBuffer();
+			
+			while ((cep = br.readLine()) != null) {
+				jsonCep.append(cep);				
+			}
+
+			Pessoa gsonAux = new Gson().fromJson(jsonCep.toString(), Pessoa.class);
+			
+			pessoa.setCep(gsonAux.getCep());
+			pessoa.setLogradouro(gsonAux.getLogradouro());
+			pessoa.setComplemento(gsonAux.getComplemento());
+			pessoa.setBairro(gsonAux.getBairro());
+			pessoa.setLocalidade(gsonAux.getLocalidade());
+			pessoa.setUf(gsonAux.getUf());
+			pessoa.setUnidade(gsonAux.getUnidade());
+			pessoa.setIbge(gsonAux.getIbge());
+			pessoa.setGia(gsonAux.getGia());
+			
+		}catch (Exception e) {
+			e.printStackTrace();
+			this.mostrarMsg("Erro ao consultar o cep");
+		}
+	}
+	
+	public void mostrarMsg(String msg) {
+		FacesContext context = FacesContext.getCurrentInstance();
+		FacesMessage message = new FacesMessage(msg);
+		context.addMessage(null, message);
 	}
 	
 	public String insert() {
@@ -49,10 +98,16 @@ public class PessoaBean {
 		return "";
 	}
 	
+	public String limpar() {
+		pessoa = new Pessoa();
+		return "";
+	}
+	
 	public String remove() {
 		daoGeneric.deletePorId(pessoa);
 		pessoa = new Pessoa();
 		carregarPessoas();
+		this.mostrarMsg("Removido com sucesso!");
 		return "";
 	}
 	
