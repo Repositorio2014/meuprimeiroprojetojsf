@@ -1,6 +1,11 @@
 package br.com.cursojsf;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
@@ -19,10 +24,15 @@ import javax.faces.context.ExternalContext;
 import javax.faces.context.FacesContext;
 import javax.faces.event.AjaxBehaviorEvent;
 import javax.faces.model.SelectItem;
+import javax.imageio.ImageIO;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Part;
+import javax.xml.bind.DatatypeConverter;
 
 import com.google.gson.Gson;
 import com.sun.faces.taglib.html_basic.CommandButtonTag;
+import com.sun.javafx.collections.MappingChange.Map;
 
 import br.com.dao.DaoGeneric;
 import br.com.entidades.Cidades;
@@ -44,12 +54,47 @@ public class PessoaBean {
 	private List<SelectItem> estados;
 	private List<SelectItem> cidades;
 	
+	private Part arquivoFoto;
+	
 	@PostConstruct
 	public void carregarPessoas() {
 		pessoas = daoGeneric.getListEntity(Pessoa.class);
 	}
 	
-	public String salvar() {
+	public String salvar() throws IOException{
+		
+		/*Processar imagem*/
+		byte[] imagemByte = getByte(arquivoFoto.getInputStream());
+		pessoa.setFotoIconBase64Original(imagemByte);/*Salva imagem original*/
+		
+		/*Transformar bufferImage*/
+		BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(imagemByte));
+		
+		/*Pegar o tipo da imagem*/
+		int type = bufferedImage.getType() == 0 ? BufferedImage.TYPE_INT_ARGB : bufferedImage.getType();
+		
+		int largura = 200;
+		int altura = 200;
+		
+		/*Criar a miniatura*/
+		BufferedImage resizeImage = new BufferedImage(largura, altura, type);
+		Graphics2D g = resizeImage.createGraphics();
+		g.drawImage(bufferedImage, 0, 0, largura, altura, null);
+		g.dispose();
+		
+		/*Escrever novamente a imagem em tamanho menor*/
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		String extensao = arquivoFoto.getContentType().split("\\/")[1]; /*image/png*/
+		ImageIO.write(resizeImage, extensao, baos);
+		
+		String miniImagem = "data:" + arquivoFoto.getContentType() + ";base64," + 
+		                    DatatypeConverter.printBase64Binary(baos.toByteArray());
+		
+		/*Processar imagem*/
+		
+		pessoa.setFotoIconBase64(miniImagem);
+		pessoa.setExtensao(extensao);
+		
 		pessoa = daoGeneric.merge(pessoa);
 		carregarPessoas();
 		this.mostrarMsg("Cadastrado com sucesso!");
@@ -234,6 +279,56 @@ public class PessoaBean {
 
 	public void setCidades(List<SelectItem> cidades) {
 		this.cidades = cidades;
+	}
+
+	public Part getArquivoFoto() {
+		return arquivoFoto;
+	}
+
+	public void setArquivoFoto(Part arquivoFoto) {
+		this.arquivoFoto = arquivoFoto;
+	}
+	
+	/*Método que converte inputStream para um array de bytes*/
+	private byte[] getByte(InputStream is) throws IOException{
+		
+		int len;
+		int size = 1024;
+		byte[] buf = null;
+		if(is instanceof ByteArrayInputStream) {
+			size = is.available();
+			buf = new byte[size];
+			len = is.read(buf, 0, size);
+		}else {
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			buf = new byte[size];
+			
+			while ((len = is.read(buf, 0, size)) != -1) {
+				bos.write(buf, 0, len);
+			}
+			
+			buf = bos.toByteArray();
+		}
+		
+		return buf;
+		
+	}
+	
+	public void download() throws IOException{
+		java.util.Map<String, String> params = FacesContext.getCurrentInstance().getExternalContext().getRequestParameterMap();
+		String fileDownloadId = params.get("fileDownloadId");
+		
+		Pessoa pessoa = daoGeneric.consultar(Pessoa.class, fileDownloadId);
+		
+		HttpServletResponse response = (HttpServletResponse) FacesContext.getCurrentInstance()
+										.getExternalContext().getResponse();
+		response.addHeader("Content-Disposition", "attachment; filename=download." + pessoa.getExtensao());
+		response.setContentType("application/octet-stream");
+		response.setContentLength(pessoa.getFotoIconBase64Original().length);
+		response.getOutputStream().write(pessoa.getFotoIconBase64Original());
+		response.getOutputStream().flush();
+		FacesContext.getCurrentInstance().responseComplete();
+		
 	}
 	
 }
